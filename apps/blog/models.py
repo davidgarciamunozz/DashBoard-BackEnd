@@ -4,6 +4,7 @@ from django.utils import timezone
 from ckeditor.fields import RichTextField
 from ckeditor_uploader.fields import RichTextUploadingField
 from django.conf import settings
+import uuid
 
 User = settings.AUTH_USER_MODEL
 
@@ -22,19 +23,19 @@ class Post (models.Model):
     )    
 
 
-    title =         models.CharField(max_length=255)
-    slug =          models.SlugField(max_length=255, unique=True)
-    thumbnail =     models.ImageField(upload_to='blog_thumbnail_directory', max_length=500)
+    title =         models.CharField(max_length=255, blank=True, null=True )
+    slug =          models.SlugField(max_length=255, unique=True, default=uuid.uuid4) 
+    thumbnail =     models.ImageField(upload_to='blog_thumbnail_directory', max_length=500, blank=True, null=True)
     author =        models.ForeignKey( User, on_delete=models.CASCADE)
-    description =   models.TextField(max_length=255)
-    content =       RichTextUploadingField()
-    time_read =     models.IntegerField(default=0)
+    description =   models.TextField(max_length=255 , blank=True, null=True)
+    content =       RichTextUploadingField( blank=True, null=True)
+    time_read =     models.IntegerField(default=0, blank=True,  null=True)
 
     published =     models.DateTimeField(default=timezone.now)
     views =         models.IntegerField(default=0, blank=True)
     status =        models.CharField(max_length=10, choices=options, default='draft')
 
-    category =      models.ForeignKey(Category, on_delete=models.PROTECT)
+    category =      models.ForeignKey(Category, on_delete=models.PROTECT , blank=True, null=True)
     objects =       models.Manager() # The default manager.
     postobjects =   PostObjects()  # The custom manager.s
 

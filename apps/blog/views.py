@@ -10,16 +10,16 @@ from apps.category.models import Category
 from .serializers import PostSerializer, PostListSerializer
 from .pagination import SmallSetPagination, MediumSetPagination, LargeSetPagination
 from django.db.models import Q
-from .permissions import IsPostAuthorOrReadOnly
+from .permissions import IsPostAuthorOrReadOnly, AuthorPermission
 from rest_framework.parsers import MultiPartParser, FormParser
 
 
 class BlogListView(APIView):
     permission_classes = [permissions.AllowAny]
-    
+
     def get(self, request, format=None):
         if Post.postobjects.all().exists():
-            
+
             posts = Post.postobjects.all()
             paginator = SmallSetPagination()
             results = paginator.paginate_queryset(posts, request)
@@ -28,14 +28,14 @@ class BlogListView(APIView):
 
             return paginator.get_paginated_response({'posts':serializer.data})
         else:
-            return Response({'Error':'No posts found'}, status=status.HTTP_404_NOT_FOUND) 
-    
+            return Response({'Error':'No posts found'}, status=status.HTTP_404_NOT_FOUND)
+
 class ListPostsByCategoryView(APIView):
     permission_classes = [permissions.AllowAny]
-    
+
     def get(self, request,format=None):
        if Post.postobjects.all().exists():
-           
+
            slug = request.query_params.get('slug')
            category = Category.objects.get(slug=slug)
            posts = Post.postobjects.order_by('-published').all()
@@ -43,7 +43,7 @@ class ListPostsByCategoryView(APIView):
            #si la categoria tiene un padre, filtrar sólo por esta categoría y no por el padre
            if category.parent:
                posts = posts.filter(category=category)
-           #Si la categoría no tiene una categoría padre, significa que es una categoría padre    
+           #Si la categoría no tiene una categoría padre, significa que es una categoría padre
            else:
                 #Filtrar categoría sola
                 if not Category.objects.filter(parent=category).exists():
@@ -54,12 +54,12 @@ class ListPostsByCategoryView(APIView):
                     filtered_categories = [category]
 
                     for cat in categories:
-                        filtered_categories.append(cat)     
+                        filtered_categories.append(cat)
 
                     filtered_categories = tuple(filtered_categories)
-                    posts = posts.filter(category__in=filtered_categories)    
-                
-        
+                    posts = posts.filter(category__in=filtered_categories)
+
+
            paginator = SmallSetPagination()
            results = paginator.paginate_queryset(posts, request)
            serializer = PostListSerializer(results, many=True)
@@ -67,14 +67,14 @@ class ListPostsByCategoryView(APIView):
            return paginator.get_paginated_response({'posts':serializer.data})
        else:
             return Response({'Error':'No posts found'}, status=status.HTTP_404_NOT_FOUND)
-           
+
 
 class PostDetailView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def get(self, request, slug, format=None):
         if Post.objects.filter(slug=slug).exists():
-         
+
          post = Post.objects.get(slug=slug)
          serializer = PostSerializer(post)
 
@@ -82,45 +82,45 @@ class PostDetailView(APIView):
          if address:
              ip = address.split(',')[-1].strip()
          else:
-             ip = request.META.get('REMOTE_ADDR')     
+             ip = request.META.get('REMOTE_ADDR')
 
          if not ViewCount.objects.filter(post=post, ip_address=ip):
              view = ViewCount(post=post, ip_address=ip)
-             view.save()    
+             view.save()
              post.views += 1
              post.save()
-         
+
          return Response({'post': serializer.data}, status=status.HTTP_200_OK)
-        
+
         else:
             return Response({'Error':'Post not found'}, status=status.HTTP_404_NOT_FOUND)
-        
+
 class SearchBlogView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def get(self, request, format=None):
         search_term = request.query_params.get('s')
         matches = Post.postobjects.filter(
-            Q(title__icontains=search_term) | 
+            Q(title__icontains=search_term) |
             Q(description__icontains=search_term) |
             Q(category__name__icontains=search_term)
         )
         paginator =SmallSetPagination()
         results = paginator.paginate_queryset(matches, request)
-        
+
         serializer = PostListSerializer( results , many=True)
         return paginator.get_paginated_response({'filtered_posts':serializer.data})
 
 
 class AuthorBlogListView(APIView):
     permission_classes = [permissions.IsAuthenticated]
-    
+
     def get(self, request, format=None):
 
         user = self.request.user
 
         if Post.objects.filter(author=user).exists():
-            
+
             posts = Post.objects.filter(author=user)
 
             paginator = SmallSetPagination()
@@ -129,7 +129,7 @@ class AuthorBlogListView(APIView):
 
             return paginator.get_paginated_response({'posts':serializer.data})
         else:
-            return Response({'Error':'No posts found'}, status=status.HTTP_404_NOT_FOUND)    
+            return Response({'Error':'No posts found'}, status=status.HTTP_404_NOT_FOUND)
 
 class EditBlogPostView(APIView):
     permission_classes = (IsPostAuthorOrReadOnly, )
@@ -137,7 +137,7 @@ class EditBlogPostView(APIView):
 
     def put(self, request, format=None):
         user = self.request.user
-        
+
         data = self.request.data
         slug = data['slug']
         print(data)
@@ -152,12 +152,17 @@ class EditBlogPostView(APIView):
         if(data['new_slug']):
             if not (data['new_slug'] == 'undefined'):
                 post.slug = slugify(data['new_slug'])
-                post.save()    
+                post.save()
 
         if(data['description']):
             if not (data['description'] == 'undefined'):
                 post.description = data['description']
-                post.save()  
+                post.save()
+
+        if(data['time_read']):
+            if not (data['time_read'] == 'undefined'):
+                post.time_read = data['time_read']
+                post.save()        
 
         if (data['content']):
             if not (data['content'] == 'undefined'):
@@ -169,8 +174,8 @@ class EditBlogPostView(APIView):
                 category_id = int(data['category'])
                 category = Category.objects.get(id=category_id)
                 post.category = category
-                post.save()            
-        
+                post.save()
+
         if (data['thumbnail']):
             if not (data['thumbnail'] == 'undefined'):
                 post.thumbnail = data['thumbnail']
@@ -183,7 +188,7 @@ class DraftBlogPostView(APIView):
     permission_classes = (IsPostAuthorOrReadOnly, )
 
     def put(self, request, format=None):
-        
+
         data = self.request.data
         slug = data['slug']
 
@@ -193,13 +198,13 @@ class DraftBlogPostView(APIView):
         post.save()
 
         return Response({'succes':'Post edited'})
-    
+
 
 class PublishBlogPostView(APIView):
     permission_classes = (IsPostAuthorOrReadOnly, )
 
     def put(self, request, format=None):
-        
+
         data = self.request.data
         slug = data['slug']
 
@@ -208,19 +213,30 @@ class PublishBlogPostView(APIView):
         post.status = 'published'
         post.save()
 
-        return Response({'succes':'Post edited'})    
-    
+        return Response({'succes':'Post edited'})
+
 class DeleteBlogPostView(APIView):
     permission_classes = (IsPostAuthorOrReadOnly, )
 
     def delete(self, request, slug, format=None):
-        
+
 
         post = Post.objects.get(slug=slug)
 
         post.delete()
 
-        return Response({'succes':'Post deleted'})    
+        return Response({'succes':'Post deleted'})
+
+class CreateBlogPostView(APIView):
+    permission_classes = (AuthorPermission,)
+    def post(self, request, format=None):
+
+        user = self.request.user
+    
+        Post.objects.create(author = user)
+
+
+        return Response({'succes':'Post created'})
 
 
 
